@@ -2,16 +2,34 @@ import sys
 import tkinter as tk
 from pathlib import Path
 from PIL import ImageTk, Image
+import argparse
+
+PROGNAME = 'anno-tater'
 
 root = tk.Tk()
-root.title('anno-tater')
+root.title(PROGNAME)
 
 WIDTH = 1024
 HEIGHT = 1024
 
+def get_args():
+    argp = argparse.ArgumentParser(
+            prog=PROGNAME,
+            description='Simple image annotator for single bounding boxes.',
+            )
+    argp.add_argument('image-directory', type=str)
+    argp.add_argument('--filetype', type=str, default='')
+    args = argp.parse_args()
+
+csv_path = Path('./annotation.csv')
+excluded_paths = []
+with open(str(csv_path), 'r') as f:
+
+
+
 # state
-imdir = Path('/data/staff/common/ML-crystals/classification/crystals')
-pathgen = imdir.glob('*.jpeg')
+imdir = Path('/mxn/groups/pub/mlcrystals/hwr-dataset-collector/images_crystals')
+pathgen = imdir.glob('**/*.jpg')
 path = str(next(pathgen))
 im = Image.open(path)
 im = im.resize((WIDTH,HEIGHT), Image.ANTIALIAS)
@@ -20,6 +38,15 @@ x = 0
 y = 0
 bbox = [0,0,0,0]
 mouse_down = False
+
+canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT)
+canvas.pack()
+imframe = canvas.create_image(WIDTH//2, HEIGHT//2, image=img)
+
+# canvas elements
+vcrosshair = canvas.create_line(0, 0, 0, 0, fill='white')
+hcrosshair = canvas.create_line(0, 0, 0, 0, fill='white')
+rect = canvas.create_rectangle(bbox, outline='red')
 
 def print_state():
     print(bbox, mouse_down)
@@ -31,15 +58,6 @@ def normalize_bbox(bbox):
     w = abs(x1 - x2)
     h = abs(y1 - y2)
     return x, y, w, h
-
-canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT)
-canvas.pack()
-imframe = canvas.create_image(WIDTH//2, HEIGHT//2, image=img)
-
-# canvas elements
-vcrosshair = canvas.create_line(0, 0, 0, 0, fill='white')
-hcrosshair = canvas.create_line(0, 0, 0, 0, fill='white')
-rect = canvas.create_rectangle(bbox, outline='red')
 
 def motion(event):
     global bbox, x, y
