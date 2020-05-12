@@ -1,7 +1,4 @@
 --------- todo ------------
-remember which images are already annotated
-don't crash when dataset runs out
-un-hardcode image dir
 --------- done ------------
 draw an image
 get mouse coordinates
@@ -12,3 +9,6 @@ react to keypress
 enlarge image
 change image
 save result
+un-hardcode image dir
+remember which images are already annotated
+don't crash when dataset runs out
