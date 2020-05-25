@@ -3,23 +3,19 @@ import tkinter as tk
 from pathlib import Path
 from PIL import ImageTk, Image
 import argparse
-from typing import Tuple
-import csv
+from typing import Tuple, Set
+from h5db import H5Database
 
 
 def get_args():
     argp = argparse.ArgumentParser(
-            prog=AnnoTater.PROGNAME,
-            description='Simple image annotator for single bounding boxes.',
-            )
-    argp.add_argument('dir', type=str, help='directory to read images from')
-    argp.add_argument('-o', '--output',
-                      help='csv file to write to',
-                      default='./annotations.csv')
-    argp.add_argument('-t', '--filetype', type=str, default='jpg')
+        prog=AnnoTater.PROGNAME,
+        description='Simple image annotator for single bounding boxes.',
+    )
+    argp.add_argument('db', type=str,
+                      help='hdf5 file containing dataset to annotate. Will both read and write.')
     argp.add_argument('--height', type=int, help='height of window in pixels', default=1024)
     argp.add_argument('--width', type=int, help='width of window in pixels', default=1024)
-    argp.add_argument('--modify', action='store_true')
     return argp.parse_args()
 
 
@@ -36,70 +32,71 @@ class AnnoTater:
 
     PROGNAME = 'anno-tater'
 
-    def __init__(self, size: Tuple[int, int], imdir: Path, filetype:str, outfile: Path, modmode: bool):
+    def __init__(self, window_size: Tuple[int, int], db: H5Database):
         self.root = root = tk.Tk()
-
-        self.modmode = modmode
-        self.width = size[0]
-        self.height = size[1]
-        self.imdir = imdir
-        self.outfile = outfile
-        self.paths = list(imdir.glob(f'**/*.{filetype}'))
+        self.width = window_size[0]
+        self.height = window_size[1]
+        self.db = db
+        self.paths = db.list_frame_names(is_annotated=False)
         self.pathindex = 0
-        print(len(self.paths))
-        if outfile.exists():
-            with open(outfile, 'r') as f:
-                csvreader = csv.reader(f)
-                donepaths = [row[0] for row in csvreader]
-                if self.modmode:
-                    self.paths = donepaths
-                else:
-                    self.paths = [p for p in self.paths if str(p) not in donepaths]
-        print(len(self.paths))
 
         # Initialize state
-        self.bbox = [0,0,0,0]
+        self.bbox = [0, 0, 0, 0]
         self.mouse_down = False
         self.tkim = self.load_image(0)
-        
+
         # Create UI elements
         self.root.title(self.PROGNAME)
         self.canvas = canvas = tk.Canvas(root, width=self.width, height=self.height)
         canvas.pack()
         self.imframe = self.canvas.create_image(
-                self.width//2,
-                self.height//2,
-                image=self.tkim
-                )
+            self.width//2,
+            self.height//2,
+            image=self.tkim
+        )
         self.vcrosshair = canvas.create_line(0, 0, 0, 0, fill='blue')
         self.hcrosshair = canvas.create_line(0, 0, 0, 0, fill='blue')
         self.rect = canvas.create_rectangle(self.bbox, outline='red')
         self.text = canvas.create_text(
-                10,10,
-                text=self.get_corner_text(),
-                anchor='nw',
-                fill='blue',
-                )
+            10, 10,
+            text=self.get_corner_text(),
+            anchor='nw',
+            fill='blue',
+        )
         self.cursor_text = canvas.create_text(
-                0,0,
-                text='',
-                anchor='sw',
-                fill='blue',
-                )
+            0, 0,
+            text='',
+            anchor='sw',
+            fill='blue',
+        )
 
     def get_corner_text(self):
         return '[{}/{}] - {}'.format(
-                self.pathindex,
-                len(self.paths),
-                self.paths[self.pathindex].stem
-                )
+            self.pathindex,
+            len(self.paths),
+            self.paths[self.pathindex],
+        )
 
     def write_bbox(self, path, bbox):
-        with open(self.outfile, 'a') as f:
-            csvwriter = csv.writer(f)
-            csvwriter.writerow([path, *bbox])
+        self.db.add_annotation(path, bbox)
 
-    def motion(self, event):
+    def next_image(self):
+        if self.pathindex == len(self.paths):
+            print('reached end of pathlist, exiting')
+            sys.exit(0)
+        self.pathindex += 1
+        self.tkim = self.load_image(self.pathindex)
+        self.canvas.itemconfig(self.imframe, image=self.tkim)
+        self.canvas.itemconfig(self.text, text=self.get_corner_text())
+
+    def load_image(self, idx):
+        im = self.db.get_frame_image(self.paths[idx])
+        im = im.resize((self.width, self.height), Image.ANTIALIAS)
+        return ImageTk.PhotoImage(image=im)
+
+    #### EVENT HANDLERS ####
+    
+    def on_motion(self, event):
         x, y = event.x, event.y
         self.canvas.coords(self.hcrosshair, (0, y, self.width, y))
         self.canvas.coords(self.vcrosshair, (x, 0, x, self.height))
@@ -116,29 +113,28 @@ class AnnoTater:
     def finish_rect(self, event):
         self.mouse_down = False
 
-    def load_image(self, idx):
-        im = Image.open(self.paths[idx])
-        im = im.resize((self.width, self.height), Image.ANTIALIAS)
-        return ImageTk.PhotoImage(image=im)
-
-    def next_image(self, event):
+    def confirm_and_proceed(self, event):
         self.write_bbox(self.paths[self.pathindex], self.bbox)
-        if self.pathindex == len(self.paths):
-            print('reached end of pathlist, exiting')
-            sys.exit(0)
-        self.pathindex += 1
-        self.tkim = self.load_image(self.pathindex)
-        self.canvas.itemconfig(self.imframe, image=self.tkim)
-        self.canvas.itemconfig(self.text, text=self.get_corner_text())
+        self.next_image()
+
+    def mark_bad(self, event):
+        self.db.assign_to_subset(self.paths[self.pathindex], self.db.SET_SHIT)
+        self.next_image()
+
+    def skip(self, event):
+        self.next_image()
+
 
     def create_bindings(self):
         root = self.root
         canvas = self.canvas
-        canvas.bind('<Motion>', self.motion)
+        canvas.bind('<Motion>', self.on_motion)
         canvas.bind('<ButtonPress-1>', self.start_rect)
         canvas.bind('<ButtonRelease-1>', self.finish_rect)
-        root.bind('<space>', self.next_image)
+        root.bind('<space>', self.confirm_and_proceed)
         root.bind('q', lambda ev: sys.exit(0))
+        root.bind('s', self.skip)
+        root.bind('d', self.mark_bad)
 
     def run(self):
         self.create_bindings()
@@ -148,12 +144,9 @@ class AnnoTater:
 if __name__ == '__main__':
     args = get_args()
     print(args)
-    assert Path(args.dir).exists()
+    db = H5Database(args.db, base_path='frames')
     app = AnnoTater(
-            size=(args.height, args.width),
-            imdir=Path(args.dir),
-            filetype=args.filetype,
-            outfile=Path(args.output),
-            modmode=args.modify,
-            )
+        window_size=(args.height, args.width),
+        db=db,
+    )
     app.run()
