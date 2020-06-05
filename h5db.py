@@ -2,6 +2,7 @@ from os.path import isfile
 from typing import Tuple, Callable, Union
 from h5py import File
 from PIL import Image
+import numpy as np
 
 class H5Database:
     """
@@ -17,10 +18,15 @@ class H5Database:
         ...
     """
 
-    SET_TRAIN = 0b0001
-    SET_VALID = 0b0010
-    SET_TEST  = 0b0100
-    SET_SHIT  = 0b1000
+    SET_TRAIN   = 0b0001
+    SET_VALID   = 0b0010
+    SET_TEST    = 0b0100
+    SET_SHIT    = 0b1000
+
+    SEL_ALL     = 0b1111
+    SEL_GOOD    = 0b0111
+    SEL_NOTRAIN = 0b0110
+
     NAME_FRAMES_BASE = 'frames'
     NAME_ATTR_SUBSET = 'subset'
     NAME_DSET_IMAGE = 'img'
@@ -33,17 +39,24 @@ class H5Database:
         else:
             raise IOError(f'The specified file "{filepath}" does not exist')
 
-    def _subset_selected(subset, selection):
-        if selection & subset
+    def _subset_selected(subset: int, selection: int) -> bool:
+        return (subset is None and selection is None) or (selection & subset != 0)
 
-    def list_frame_names(self, is_annotated: bool = None, subset: int):
+    def list_frame_names(self, is_annotated: bool = None, include_bad: bool = False, sort_by_time=False):
         with File(self.filepath, 'r+') as fileroot:
             base = fileroot[self.base_path]
             children = list(base)
-            if in_subset is not None:
+            if sort_by_time:
+                children.sort(key=lambda p: base[p].attrs.get('time'))
+            # if subset_selection is not None:
+            #     children = [
+            #         c for c in children
+            #         if _subset_selected(base[c].attrs.get(self.NAME_ATTR_SUBSET), subset_selection)
+            #     ]
+            if not include_bad:
                 children = [
                     c for c in children
-                    if base[c].attrs.get(self.NAME_ATTR_SUBSET) == in_subset
+                    if base[c].attrs.get(self.NAME_ATTR_SUBSET, default=0) != self.SET_SHIT
                 ]
             if is_annotated is not None:
                 children = [
@@ -62,7 +75,8 @@ class H5Database:
         """Add an annotation bounding box `bbox` to a frame with name `frame_name`."""
         with File(self.filepath, 'r+') as fileroot:
             frame = fileroot[self.base_path][frame_name]
-            frame.create_dataset(self.NAME_ANNOTATION_BOUNDING_BOX, data=bbox)
+            anno = frame.require_dataset(self.NAME_ANNOTATION_BOUNDING_BOX, shape=(4,), dtype=np.int64)
+            anno[:] = bbox
 
     def get_annotation(self, frame_name: str, annotation_name) -> Tuple[float, float, float, float]:
         with File(self.filepath, 'r') as fileroot:

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys
 import tkinter as tk
 from pathlib import Path
@@ -37,7 +39,7 @@ class AnnoTater:
         self.width = window_size[0]
         self.height = window_size[1]
         self.db = db
-        self.paths = db.list_frame_names(is_annotated=False)
+        self.paths = db.list_frame_names(is_annotated=False, include_bad=False, sort_by_time=True)
         self.pathindex = 0
 
         # Initialize state
@@ -57,6 +59,7 @@ class AnnoTater:
         self.vcrosshair = canvas.create_line(0, 0, 0, 0, fill='blue')
         self.hcrosshair = canvas.create_line(0, 0, 0, 0, fill='blue')
         self.rect = canvas.create_rectangle(self.bbox, outline='red')
+        self.rectmid = canvas.create_text(0, 0, text='.', fill='red')
         self.text = canvas.create_text(
             10, 10,
             text=self.get_corner_text(),
@@ -80,11 +83,11 @@ class AnnoTater:
     def write_bbox(self, path, bbox):
         self.db.add_annotation(path, bbox)
 
-    def next_image(self):
+    def next_image(self, step=1):
         if self.pathindex == len(self.paths):
             print('reached end of pathlist, exiting')
             sys.exit(0)
-        self.pathindex += 1
+        self.pathindex += step
         self.tkim = self.load_image(self.pathindex)
         self.canvas.itemconfig(self.imframe, image=self.tkim)
         self.canvas.itemconfig(self.text, text=self.get_corner_text())
@@ -103,6 +106,7 @@ class AnnoTater:
         if self.mouse_down:
             self.bbox[2:] = (x, y)
         self.canvas.coords(self.rect, self.bbox)
+        self.canvas.coords(self.rectmid, normalize_bbox(self.bbox)[:2])
         self.canvas.coords(self.cursor_text, (x, y))
         self.canvas.itemconfig(self.cursor_text, text=f' x:{x} y:{y}')
 
@@ -124,6 +128,9 @@ class AnnoTater:
     def skip(self, event):
         self.next_image()
 
+    def undo(self, event):
+        self.next_image(step=-1)
+
 
     def create_bindings(self):
         root = self.root
@@ -135,6 +142,7 @@ class AnnoTater:
         root.bind('q', lambda ev: sys.exit(0))
         root.bind('s', self.skip)
         root.bind('d', self.mark_bad)
+        root.bind('z', self.undo)
 
     def run(self):
         self.create_bindings()
