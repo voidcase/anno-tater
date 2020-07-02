@@ -93,7 +93,7 @@ class AnnoTater:
         self.canvas.itemconfig(self.text, text=self.get_corner_text())
 
     def load_image(self, idx):
-        im = self.db.get_frame_image(self.paths[idx])
+        im = Image.fromarray(self.db.get_frame_image(self.paths[idx]))
         im = im.resize((self.width, self.height), Image.ANTIALIAS)
         return ImageTk.PhotoImage(image=im)
 
