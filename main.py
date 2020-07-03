@@ -1,24 +1,37 @@
 #!/usr/bin/env python3
 
 import sys
-import tkinter as tk
-from pathlib import Path
-from PIL import ImageTk, Image
 import argparse
-from typing import Tuple, Set
-from h5db import H5Database
+from typing import Tuple
+import tkinter as tk
+from PIL import ImageTk, Image
+from mxaimbot_common.h5db import H5Database
 
 
 def get_args():
-    argp = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         prog=AnnoTater.PROGNAME,
         description='Simple image annotator for single bounding boxes.',
     )
-    argp.add_argument('db', type=str,
-                      help='hdf5 file containing dataset to annotate. Will both read and write.')
-    argp.add_argument('--height', type=int, help='height of window in pixels', default=1024)
-    argp.add_argument('--width', type=int, help='width of window in pixels', default=1024)
-    return argp.parse_args()
+    parser.add_argument(
+        'db',
+        type=str,
+        help='hdf5 file containing dataset to annotate. Will both read and write.'
+    )
+    parser.add_argument(
+        '--height',
+        type=int,
+        help='height of window in pixels',
+        default=1024
+    )
+    parser.add_argument(
+        '--width',
+        type=int,
+        help='width of window in pixels',
+        default=1024
+    )
+    parser.add_argument('--inspect', action='store_true')
+    return parser.parse_args()
 
 
 def normalize_bbox(bbox: Tuple[int, int, int, int]):
@@ -34,12 +47,26 @@ class AnnoTater:
 
     PROGNAME = 'anno-tater'
 
-    def __init__(self, window_size: Tuple[int, int], db: H5Database):
+    def __init__(self, window_size: Tuple[int, int], db: H5Database, inspect_mode=False):
         self.root = root = tk.Tk()
         self.width = window_size[0]
         self.height = window_size[1]
         self.db = db
-        self.paths = db.list_frame_names(is_annotated=False, include_bad=False, sort_by_time=True)
+        self.inspect_mode = inspect_mode
+        if self.inspect_mode:
+            self.paths = db.list_frame_names(
+                is_annotated=True,
+                include_bad=False,
+                sort_by_time=True
+            )
+
+        else:
+            self.paths = db.list_frame_names(
+                is_annotated=False,
+                include_bad=False,
+                sort_by_time=True
+            )
+
         self.pathindex = 0
 
         # Initialize state
@@ -72,6 +99,8 @@ class AnnoTater:
             anchor='sw',
             fill='blue',
         )
+        self.annotation_bboxes = []
+        self.predicted_bboxes = []
 
     def get_corner_text(self):
         return '[{}/{}] - {}'.format(
@@ -131,18 +160,20 @@ class AnnoTater:
     def undo(self, event):
         self.next_image(step=-1)
 
-
     def create_bindings(self):
         root = self.root
         canvas = self.canvas
-        canvas.bind('<Motion>', self.on_motion)
-        canvas.bind('<ButtonPress-1>', self.start_rect)
-        canvas.bind('<ButtonRelease-1>', self.finish_rect)
-        root.bind('<space>', self.confirm_and_proceed)
+        if not self.inspect_mode:
+            canvas.bind('<Motion>', self.on_motion)
+            canvas.bind('<ButtonPress-1>', self.start_rect)
+            canvas.bind('<ButtonRelease-1>', self.finish_rect)
+            root.bind('d', self.mark_bad)
+            root.bind('<space>', self.confirm_and_proceed)
         root.bind('q', lambda ev: sys.exit(0))
         root.bind('s', self.skip)
-        root.bind('d', self.mark_bad)
+        root.bind('<Left>', self.skip)
         root.bind('z', self.undo)
+        root.bind('<Right>', self.skip)
 
     def run(self):
         self.create_bindings()
@@ -156,5 +187,6 @@ if __name__ == '__main__':
     app = AnnoTater(
         window_size=(args.height, args.width),
         db=db,
+        inspect_mode=args.inspect
     )
     app.run()

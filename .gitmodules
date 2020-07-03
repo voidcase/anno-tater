@@ -1,0 +1,3 @@
+[submodule "mxaimbot_common"]
+	path = mxaimbot_common
+	url = git@gitlab.maxiv.lu.se:isalin/mxaimbot_common.git
