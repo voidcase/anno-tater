@@ -120,6 +120,10 @@ class AnnoTater:
         self.tkim = self.load_image(self.pathindex)
         self.canvas.itemconfig(self.imframe, image=self.tkim)
         self.canvas.itemconfig(self.text, text=self.get_corner_text())
+        if self.inspect_mode:
+            print('predictions')
+            for name, bbox in self.db.get_predictions(self.paths[self.pathindex]):
+                print(name, bbox)
 
     def load_image(self, idx):
         im = Image.fromarray(self.db.get_frame_image(self.paths[idx]))
@@ -127,7 +131,7 @@ class AnnoTater:
         return ImageTk.PhotoImage(image=im)
 
     #### EVENT HANDLERS ####
-    
+
     def on_motion(self, event):
         x, y = event.x, event.y
         self.canvas.coords(self.hcrosshair, (0, y, self.width, y))
