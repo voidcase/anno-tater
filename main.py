@@ -6,6 +6,7 @@ from typing import Tuple
 import tkinter as tk
 from PIL import ImageTk, Image
 from mxaimbot_common.h5db import H5Database
+from mxaimbot_common import util
 
 
 def get_args():
@@ -34,16 +35,11 @@ def get_args():
     return parser.parse_args()
 
 
-def normalize_bbox(bbox: Tuple[int, int, int, int]):
-    x1, y1, x2, y2 = bbox
-    x = (x1 + x2) // 2
-    y = (y1 + y2) // 2
-    w = abs(x1 - x2)
-    h = abs(y1 - y2)
-    return x, y, w, h
-
-
 class AnnoTater:
+    """
+    GUI for annotating images with bounding boxes.
+    """
+    #pylint: disable=too-many-instance-attributes
 
     PROGNAME = 'anno-tater'
 
@@ -86,7 +82,8 @@ class AnnoTater:
         self.vcrosshair = canvas.create_line(0, 0, 0, 0, fill='blue')
         self.hcrosshair = canvas.create_line(0, 0, 0, 0, fill='blue')
         self.rect = canvas.create_rectangle(self.bbox, outline='red')
-        self.rectmid = canvas.create_text(0, 0, text='.', fill='red')
+        self.rect_center = canvas.create_text(0, 0, text='.', fill='red', anchor='s')
+        self.rect_text = canvas.create_text(50, 50, text='AAAAA', fill='red', anchor='nw')
         self.text = canvas.create_text(
             10, 10,
             text=self.get_corner_text(),
@@ -99,10 +96,10 @@ class AnnoTater:
             anchor='sw',
             fill='blue',
         )
-        self.annotation_bboxes = []
-        self.predicted_bboxes = []
+        self.annotation_bboxes = None
 
-    def get_corner_text(self):
+    def get_corner_text(self) -> str:
+        "Returns text to display in the corner of the screen."
         return '[{}/{}] - {}'.format(
             self.pathindex,
             len(self.paths),
@@ -121,9 +118,19 @@ class AnnoTater:
         self.canvas.itemconfig(self.imframe, image=self.tkim)
         self.canvas.itemconfig(self.text, text=self.get_corner_text())
         if self.inspect_mode:
-            print('predictions')
-            for name, bbox in self.db.get_predictions(self.paths[self.pathindex]):
-                print(name, bbox)
+            # print('predictions')
+            # for name, bbox in self.db.get_predictions(self.paths[self.pathindex]):
+            #     print(name, bbox)
+            #     rect = self.canvas.create_rectangle()
+
+            existing_anno = self.db.get_annotation(self.paths[self.pathindex])
+            # TODO ska vara scaled_xywh efter att datasettets annos normaliserats
+            existing_anno_xyxy = util.xywh_to_xyxy(existing_anno)
+            print(existing_anno_xyxy)
+            self.canvas.coords(self.rect, existing_anno)
+            self.canvas.coords(self.rect_text, existing_anno[:2])
+            self.canvas.itemconfig(self.rect_text, text="annotation")
+            print(self.canvas.coords(self.rect_text))
 
     def load_image(self, idx):
         im = Image.fromarray(self.db.get_frame_image(self.paths[idx]))
@@ -139,7 +146,7 @@ class AnnoTater:
         if self.mouse_down:
             self.bbox[2:] = (x, y)
         self.canvas.coords(self.rect, self.bbox)
-        self.canvas.coords(self.rectmid, normalize_bbox(self.bbox)[:2])
+        self.canvas.coords(self.rect_center, util.xyxy_to_xywh(self.bbox)[:2])
         self.canvas.coords(self.cursor_text, (x, y))
         self.canvas.itemconfig(self.cursor_text, text=f' x:{x} y:{y}')
 
