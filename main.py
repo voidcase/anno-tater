@@ -107,7 +107,8 @@ class AnnoTater:
         )
 
     def write_bbox(self, path, bbox):
-        self.db.add_annotation(path, bbox)
+        normalized_bbox = util.xyxy_to_scaled_xywh(bbox, (self.height, self.width))
+        self.db.add_annotation(path, normalized_bbox)
 
     def next_image(self, step=1):
         if self.pathindex == len(self.paths):
@@ -124,11 +125,10 @@ class AnnoTater:
             #     rect = self.canvas.create_rectangle()
 
             existing_anno = self.db.get_annotation(self.paths[self.pathindex])
-            # TODO ska vara scaled_xywh efter att datasettets annos normaliserats
-            existing_anno_xyxy = util.xywh_to_xyxy(existing_anno)
+            existing_anno_xyxy = util.scaled_xywh_to_xyxy(existing_anno, (self.height, self.width))
             print(existing_anno_xyxy)
-            self.canvas.coords(self.rect, existing_anno)
-            self.canvas.coords(self.rect_text, existing_anno[:2])
+            self.canvas.coords(self.rect, existing_anno_xyxy)
+            self.canvas.coords(self.rect_text, existing_anno_xyxy[:2])
             self.canvas.itemconfig(self.rect_text, text="annotation")
             print(self.canvas.coords(self.rect_text))
 
