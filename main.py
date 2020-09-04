@@ -2,7 +2,7 @@
 
 import sys
 import argparse
-from typing import Tuple
+from typing import Tuple, List
 import tkinter as tk
 from PIL import ImageTk, Image
 from mxaimbot_common.h5db import H5Database
@@ -53,7 +53,8 @@ class AnnoTater:
             self.paths = db.list_frame_names(
                 is_annotated=True,
                 include_bad=False,
-                sort_by_time=True
+                sort_by_time=True,
+                in_subset=db.SET_TEST,
             )
 
         else:
@@ -96,7 +97,7 @@ class AnnoTater:
             anchor='sw',
             fill='blue',
         )
-        self.annotation_bboxes = None
+        self.predictions: List[Tuple[int, int]] = [] # rectangle_id text_id
 
     def get_corner_text(self) -> str:
         "Returns text to display in the corner of the screen."
@@ -119,18 +120,25 @@ class AnnoTater:
         self.canvas.itemconfig(self.imframe, image=self.tkim)
         self.canvas.itemconfig(self.text, text=self.get_corner_text())
         if self.inspect_mode:
-            # print('predictions')
-            # for name, bbox in self.db.get_predictions(self.paths[self.pathindex]):
-            #     print(name, bbox)
-            #     rect = self.canvas.create_rectangle()
+            # undisplay previous predictions
+            for rect, text in self.predictions:
+                self.canvas.delete(rect)
+                self.canvas.delete(text)
+            self.predictions = []
+            # display predictions
+            for name, bbox in self.db.get_predictions(self.paths[self.pathindex]):
+                print(name, bbox)
+                xyxy = util.scaled_xywh_to_xyxy(bbox, (self.height, self.width))
+                rect = self.canvas.create_rectangle(xyxy, outline='blue')
+                text = self.canvas.create_text(xyxy[:2], text=name, fill='blue', anchor='nw')
+                self.predictions.append((rect, text))
+
 
             existing_anno = self.db.get_annotation(self.paths[self.pathindex])
             existing_anno_xyxy = util.scaled_xywh_to_xyxy(existing_anno, (self.height, self.width))
-            print(existing_anno_xyxy)
             self.canvas.coords(self.rect, existing_anno_xyxy)
             self.canvas.coords(self.rect_text, existing_anno_xyxy[:2])
             self.canvas.itemconfig(self.rect_text, text="annotation")
-            print(self.canvas.coords(self.rect_text))
 
     def load_image(self, idx):
         im = Image.fromarray(self.db.get_frame_image(self.paths[idx]))
@@ -182,7 +190,7 @@ class AnnoTater:
             root.bind('<space>', self.confirm_and_proceed)
         root.bind('q', lambda ev: sys.exit(0))
         root.bind('s', self.skip)
-        root.bind('<Left>', self.skip)
+        root.bind('<Left>', self.undo)
         root.bind('z', self.undo)
         root.bind('<Right>', self.skip)
 
