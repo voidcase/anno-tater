@@ -32,6 +32,7 @@ def get_args():
         default=1024
     )
     parser.add_argument('--inspect', action='store_true')
+    parser.add_argument('--model', action='append', help='name of a particular model to show in inspect mode. When omitted all availabe models will be shown')
     return parser.parse_args()
 
 
@@ -56,6 +57,7 @@ class AnnoTater:
                 sort_by_time=True,
                 in_subset=db.SET_TEST,
             )
+            self.models = args.model
 
         else:
             self.paths = db.list_frame_names(
@@ -127,11 +129,12 @@ class AnnoTater:
             self.predictions = []
             # display predictions
             for name, bbox in self.db.get_predictions(self.paths[self.pathindex]):
-                print(name, bbox)
-                xyxy = util.scaled_xywh_to_xyxy(bbox, (self.height, self.width))
-                rect = self.canvas.create_rectangle(xyxy, outline='blue')
-                text = self.canvas.create_text(xyxy[:2], text=name, fill='blue', anchor='nw')
-                self.predictions.append((rect, text))
+                if not self.models or name in self.models:
+                    print(name, bbox)
+                    xyxy = util.scaled_xywh_to_xyxy(bbox, (self.height, self.width))
+                    rect = self.canvas.create_rectangle(xyxy, outline='blue')
+                    text = self.canvas.create_text(xyxy[:2], text=name, fill='blue', anchor='nw')
+                    self.predictions.append((rect, text))
 
 
             existing_anno = self.db.get_annotation(self.paths[self.pathindex])
@@ -179,6 +182,14 @@ class AnnoTater:
     def undo(self, event):
         self.next_image(step=-1)
 
+    def select_models(self, event):
+        select_box = tk.Listbox(self.root, selectmode='multiple')
+        select_box.insert(tk.END, "Thing 1")
+        select_box.insert(tk.END, "Thing 2")
+        select_box.insert(tk.END, "Thing 3")
+        select_box.insert(tk.END, "Thing 4")
+        select_box.pack(expand=tk.YES, fill="both")
+
     def create_bindings(self):
         root = self.root
         canvas = self.canvas
@@ -193,6 +204,7 @@ class AnnoTater:
         root.bind('<Left>', self.undo)
         root.bind('z', self.undo)
         root.bind('<Right>', self.skip)
+        root.bind('m', self.select_models)
 
     def run(self):
         self.create_bindings()
