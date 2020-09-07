@@ -32,7 +32,12 @@ def get_args():
         default=1024
     )
     parser.add_argument('--inspect', action='store_true')
-    parser.add_argument('--model', action='append', help='name of a particular model to show in inspect mode. When omitted all availabe models will be shown')
+    parser.add_argument(
+        '--model',
+        action='append',
+        help='name of a particular model to show in inspect mode. \
+                When omitted all availabe models will be shown'
+    )
     return parser.parse_args()
 
 
