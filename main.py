@@ -104,7 +104,7 @@ class AnnoTater:
             anchor='sw',
             fill='blue',
         )
-        self.predictions: List[Tuple[int, int]] = [] # rectangle_id text_id
+        self.predictions: List[Tuple[int, int, int]] = [] # rectangle_id, text_id, center_id
 
     def get_corner_text(self) -> str:
         "Returns text to display in the corner of the screen."
@@ -128,18 +128,26 @@ class AnnoTater:
         self.canvas.itemconfig(self.text, text=self.get_corner_text())
         if self.inspect_mode:
             # undisplay previous predictions
-            for rect, text in self.predictions:
+            for rect, text, center in self.predictions:
                 self.canvas.delete(rect)
                 self.canvas.delete(text)
+                self.canvas.delete(center)
             self.predictions = []
             # display predictions
             for name, bbox in self.db.get_predictions(self.paths[self.pathindex]):
                 if not self.models or name in self.models:
                     print(name, bbox)
                     xyxy = util.scaled_xywh_to_xyxy(bbox, (self.height, self.width))
+                    center_coords = util.xyxy_to_xywh(xyxy)[:2]
                     rect = self.canvas.create_rectangle(xyxy, outline='blue')
                     text = self.canvas.create_text(xyxy[:2], text=name, fill='blue', anchor='nw')
-                    self.predictions.append((rect, text))
+                    center = self.canvas.create_text(
+                        center_coords,
+                        text='.',
+                        anchor='s',
+                        fill='blue'
+                    )
+                    self.predictions.append((rect, text, center))
 
 
             existing_anno = self.db.get_annotation(self.paths[self.pathindex])
