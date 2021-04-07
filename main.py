@@ -38,6 +38,7 @@ def get_args():
         help='name of a particular model to show in inspect mode. \
                 When omitted all availabe models will be shown'
     )
+    parser.add_argument('--list-models', action='store_true')
     return parser.parse_args()
 
 
@@ -228,6 +229,15 @@ if __name__ == '__main__':
     args = get_args()
     print(args)
     db = H5Database(args.db, base_path='frames')
+    if args.list_models:
+        frames = db.list_frame_names()
+        models = set()
+        for frame in frames:
+            for model, _ in db.get_predictions(frame):
+                models.add(model)
+        for model in models:
+            print(model)
+        sys.exit(0)
     app = AnnoTater(
         window_size=(args.height, args.width),
         db=db,
